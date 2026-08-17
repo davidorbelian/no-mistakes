@@ -16,6 +16,7 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/daemon"
 	"github.com/kunchenguid/no-mistakes/internal/db"
 	"github.com/kunchenguid/no-mistakes/internal/git"
+	"github.com/kunchenguid/no-mistakes/internal/gittest"
 	"github.com/kunchenguid/no-mistakes/internal/paths"
 )
 
@@ -93,8 +94,11 @@ func TestMain(m *testing.M) {
 	_ = os.Setenv("NO_MISTAKES_TELEMETRY", "off")
 	_ = os.Setenv("NO_MISTAKES_NO_UPDATE_CHECK", "1")
 
+	restoreGitConfig := gittest.IsolateConfig()
+
 	code := m.Run()
 
+	restoreGitConfig()
 	_ = daemon.Stop(paths.WithRoot(root))
 	_ = os.RemoveAll(root)
 	_ = os.RemoveAll(home)

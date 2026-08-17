@@ -55,8 +55,8 @@ func RefreshRepoURLs(ctx context.Context, database *db.DB, repo *db.Repo) (*db.R
 		return nil, false, refreshFailure(RefreshRemoteUnreadable)
 	}
 
-	originURLs, err := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, "origin")
-	if err != nil || len(originURLs) == 0 {
+	originURLs, originFound, err := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, "origin")
+	if err != nil || !originFound || len(originURLs) == 0 {
 		return nil, false, refreshFailure(RefreshRemoteUnreadable)
 	}
 	if len(originURLs) != 1 {
@@ -87,9 +87,16 @@ func RefreshRepoURLs(ctx context.Context, database *db.DB, repo *db.Repo) (*db.R
 			if name == "origin" || name == RemoteName {
 				continue
 			}
-			candidateURLs, readErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, name)
-			if readErr != nil || len(candidateURLs) == 0 {
+			candidateURLs, candidateFound, readErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, name)
+			if readErr != nil {
 				return nil, false, refreshFailure(RefreshRemoteUnreadable)
+			}
+			// A remote with no URL cannot identify the fork, so it is simply not
+			// a candidate. A global `remote.<name>.pushurl` push guard puts such
+			// a remote in every repository on the machine, and failing here would
+			// disable fork refresh for every repo on it.
+			if !candidateFound || len(candidateURLs) == 0 {
+				continue
 			}
 			if len(candidateURLs) != 1 {
 				return nil, false, refreshFailure(RefreshAmbiguousRemote)
@@ -116,16 +123,16 @@ func RefreshRepoURLs(ctx context.Context, database *db.DB, repo *db.Repo) (*db.R
 		// Re-read the selected fork source immediately before replacement. A
 		// concurrent git-config edit makes the source ambiguous rather than
 		// allowing a mixed snapshot into the registry.
-		confirmed, confirmErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, candidates[0].name)
-		if confirmErr != nil || len(confirmed) != 1 || confirmed[0] != forkURL {
+		confirmed, confirmedFound, confirmErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, candidates[0].name)
+		if confirmErr != nil || !confirmedFound || len(confirmed) != 1 || confirmed[0] != forkURL {
 			return nil, false, refreshFailure(RefreshAmbiguousRemote)
 		}
 	}
 
 	// Re-read origin at the replacement boundary for the same reason. This is
 	// still read-only and does not alter clone configuration.
-	confirmedOrigin, confirmErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, "origin")
-	if confirmErr != nil || len(confirmedOrigin) != 1 || confirmedOrigin[0] != upstream.raw {
+	confirmedOrigin, confirmedOriginFound, confirmErr := git.GetConfiguredRemoteURLs(ctx, repo.WorkingPath, "origin")
+	if confirmErr != nil || !confirmedOriginFound || len(confirmedOrigin) != 1 || confirmedOrigin[0] != upstream.raw {
 		return nil, false, refreshFailure(RefreshAmbiguousRemote)
 	}
 
