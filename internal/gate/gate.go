@@ -214,6 +214,16 @@ func provisionGate(ctx context.Context, bareDir, absRoot, upstreamURL, reposDir 
 		return fmt.Errorf("add gate origin remote: %w", err)
 	}
 
+	// That origin URL keeps its embedded credential in plain text, because
+	// worktrees carved from this gate authenticate with it (only the DB copy is
+	// redacted). The app-state root is owner-only, so this mode is the last line
+	// of defense for a copy of the file that ever leaves it. Git preserves the
+	// mode of an existing config file when it rewrites it, so a later remote
+	// change keeps it.
+	if err := paths.MakeFilePrivate(filepath.Join(bareDir, "config")); err != nil {
+		return fmt.Errorf("restrict gate config permissions: %w", err)
+	}
+
 	if err := ensureWorkingRemote(ctx, absRoot, bareDir, reposDir, refresh); err != nil {
 		return fmt.Errorf("add remote: %w", err)
 	}

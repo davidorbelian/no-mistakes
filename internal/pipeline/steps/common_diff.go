@@ -112,9 +112,10 @@ func changedPathList(changedFiles string) []string {
 }
 
 // reviewablePaths returns the changed paths that survive the repo's ignore
-// patterns. ignore_patterns is a pushed-branch field, so this subset decides
-// only whether a step has anything to work on; it must never decide which
-// trusted configuration applies to a run.
+// patterns. This subset decides only whether a step has anything to work on; it
+// must never decide which trusted configuration applies to a run. An empty
+// subset approves the review step with no agent review, which is why
+// ignore_patterns itself is trusted-only (see config.EffectiveRepoConfig).
 //
 // changed is the already-split complete set from changedPathList, so a step
 // that needs both views splits the `git diff --name-only` payload once and

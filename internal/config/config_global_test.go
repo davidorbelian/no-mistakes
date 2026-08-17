@@ -3,10 +3,12 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kunchenguid/no-mistakes/internal/paths"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 	"gopkg.in/yaml.v3"
 )
@@ -518,5 +520,38 @@ func TestLoadGlobal_AutoFixPartial(t *testing.T) {
 	// Unset fields should remain nil
 	if cfg.AutoFix.Test != nil {
 		t.Errorf("test = %v, want nil", cfg.AutoFix.Test)
+	}
+}
+
+// TestEnsureDefaultGlobalConfig_KeepsTheConfigPrivate covers both the fresh
+// write and the upgrade path: the global config lives in the owner-only app
+// state, and a copy an older version left world-readable is tightened in place.
+func TestEnsureDefaultGlobalConfig_KeepsTheConfigPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX file modes are not enforced on Windows")
+	}
+
+	fresh := filepath.Join(t.TempDir(), "config.yaml")
+	EnsureDefaultGlobalConfig(fresh)
+	if info, err := os.Stat(fresh); err != nil {
+		t.Fatal(err)
+	} else if got := info.Mode().Perm(); got != paths.FileMode {
+		t.Errorf("fresh config mode = %o, want %o", got, paths.FileMode)
+	}
+
+	existing := filepath.Join(t.TempDir(), "config.yaml")
+	if err := os.WriteFile(existing, []byte("agent: codex\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	EnsureDefaultGlobalConfig(existing)
+	if info, err := os.Stat(existing); err != nil {
+		t.Fatal(err)
+	} else if got := info.Mode().Perm(); got != paths.FileMode {
+		t.Errorf("existing config mode = %o, want %o", got, paths.FileMode)
+	}
+	if data, err := os.ReadFile(existing); err != nil {
+		t.Fatal(err)
+	} else if string(data) != "agent: codex\n" {
+		t.Errorf("tightening rewrote the config: %q", string(data))
 	}
 }

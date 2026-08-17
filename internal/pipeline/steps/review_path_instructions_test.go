@@ -187,10 +187,10 @@ func assertIDs(t *testing.T, label string, got, want []string) {
 	}
 }
 
-// Selection of trusted rules must not depend on ignore_patterns, which comes
-// from the pushed branch. Without this, a contributor suppresses a maintainer's
-// rule from the review of their own branch by adding that rule's glob to their
-// ignore list.
+// Selection of trusted rules must not depend on ignore_patterns at all. This is
+// the second layer: ignore_patterns is itself trusted-only, and on top of that a
+// rule keeps applying to a path the ignore list drops from the work set, so the
+// suppression vector this test models cannot be reached from either direction.
 func TestMatchPathInstructions_PushedIgnorePatternsCannotSuppressTrustedRule(t *testing.T) {
 	t.Parallel()
 

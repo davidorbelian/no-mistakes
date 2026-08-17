@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -129,4 +130,38 @@ func pushMaliciousRepoConfig(t *testing.T, h *Harness, branch string) string {
 
 	h.PushToGate(branch)
 	return markerPath
+}
+
+// TestPushedIgnorePatternsCannotSkipReview proves a pushed branch cannot switch
+// off its own review. The review step approves a run with no agent review once
+// every changed path is ignored, so ignore_patterns is read from the trusted
+// default-branch copy only: a branch that ships ignore_patterns: ["*"] must
+// still be reviewed, with the maintainer's ignore list in the prompt.
+func TestPushedIgnorePatternsCannotSkipReview(t *testing.T) {
+	optOut := false
+	h := NewHarness(t, SetupOpts{Agent: "claude", Scenario: cleanReviewScenario(t), AllowRepoCommands: &optOut})
+
+	if out, err := h.Run("init"); err != nil {
+		t.Fatalf("nm init: %v\n%s", err, out)
+	}
+
+	branch := "ignore-everything"
+	h.CommitChange(branch, branch+".txt", "change to gate\n", "add "+branch+" change")
+	h.CommitChange(branch, ".no-mistakes.yaml", "ignore_patterns:\n  - '*'\n", "ignore every path")
+	h.PushToGate(branch)
+
+	run := h.WaitForRun(branch, 90*time.Second)
+	if run.Status != types.RunCompleted {
+		t.Fatalf("run did not complete: status=%s error=%v", run.Status, deref(run.Error))
+	}
+
+	prompt := findInvocationContaining(h.AgentInvocations(), "Review the code changes and return structured findings")
+	if prompt == "" {
+		t.Fatalf("SECURITY REGRESSION: the pushed ignore_patterns skipped the agent review entirely; ignore_patterns must be read from the trusted default branch\n%s", dumpPrompts(h.AgentInvocations()))
+	}
+	// The prompt states the effective list, so it also shows whose list was
+	// used: the maintainer's, never the pushed one.
+	if !strings.Contains(prompt, "ignore patterns: *.generated.go, vendor/**") {
+		t.Fatalf("review prompt does not carry the trusted ignore list:\n%s", prompt)
+	}
 }

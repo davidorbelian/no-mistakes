@@ -69,10 +69,12 @@ func TestEffectiveRepoConfig_TrustedOverridesPushedCommands(t *testing.T) {
 	if got.Agent != types.AgentClaude {
 		t.Errorf("agent = %q, want trusted value", got.Agent)
 	}
-	// Non-executing fields still come from the pushed copy.
-	if len(got.IgnorePatterns) != 1 || got.IgnorePatterns[0] != "vendor/**" {
-		t.Errorf("ignore_patterns = %v, want pushed value", got.IgnorePatterns)
+	// ignore_patterns decides whether review runs at all, so it comes from the
+	// trusted copy; see TestEffectiveRepoConfig_IgnorePatternsTrustedOnly.
+	if len(got.IgnorePatterns) != 0 {
+		t.Errorf("ignore_patterns = %v, want none (trusted copy has no ignore list)", got.IgnorePatterns)
 	}
+	// Non-executing fields that gate nothing still come from the pushed copy.
 	if got.Commit.FixMessage == nil || *got.Commit.FixMessage != pushedTemplate {
 		t.Errorf("commit.fix_message = %v, want pushed value", got.Commit.FixMessage)
 	}
@@ -438,6 +440,64 @@ func TestParseRepoConfig_NoCI_Semantics(t *testing.T) {
 		if cfg.NoCI != c.want {
 			t.Errorf("%s: NoCI=%v want %v", c.name, cfg.NoCI, c.want)
 		}
+	}
+}
+
+// TestEffectiveRepoConfig_IgnorePatternsTrustedOnly proves a feature branch
+// cannot bring its own ignore_patterns. The review step auto-approves with no
+// agent review when every changed path is ignored, so a pushed
+// ignore_patterns: ["*"] would switch review off for exactly the branch under
+// review.
+func TestEffectiveRepoConfig_IgnorePatternsTrustedOnly(t *testing.T) {
+	pushed := &RepoConfig{IgnorePatterns: []string{"*"}}
+	trusted := &RepoConfig{IgnorePatterns: []string{"vendor/**"}}
+
+	got := EffectiveRepoConfig(pushed, trusted, false)
+	if len(got.IgnorePatterns) != 1 || got.IgnorePatterns[0] != "vendor/**" {
+		t.Errorf("ignore_patterns = %v, want the trusted value", got.IgnorePatterns)
+	}
+
+	// allow_repo_commands scopes the code-executing selection fields only; it
+	// must not let a pushed ignore list through.
+	got = EffectiveRepoConfig(pushed, trusted, true)
+	if len(got.IgnorePatterns) != 1 || got.IgnorePatterns[0] != "vendor/**" {
+		t.Errorf("allow_repo_commands: ignore_patterns = %v, want the trusted value", got.IgnorePatterns)
+	}
+
+	// A trusted copy with no ignore list means nothing is ignored, even when the
+	// pushed branch ships one.
+	got = EffectiveRepoConfig(pushed, &RepoConfig{}, false)
+	if len(got.IgnorePatterns) != 0 {
+		t.Errorf("trusted without ignore_patterns: ignore_patterns = %v, want none", got.IgnorePatterns)
+	}
+
+	// No trusted copy at all: nothing is ignored, so every changed path is
+	// reviewed.
+	got = EffectiveRepoConfig(pushed, nil, false)
+	if len(got.IgnorePatterns) != 0 {
+		t.Errorf("nil trusted: ignore_patterns = %v, want none", got.IgnorePatterns)
+	}
+
+	// The effective slice must not alias the trusted one, so a later caller
+	// cannot mutate the maintainer's config through it.
+	got = EffectiveRepoConfig(pushed, trusted, false)
+	got.IgnorePatterns[0] = "mutated"
+	if trusted.IgnorePatterns[0] != "vendor/**" {
+		t.Errorf("trusted config was mutated: ignore_patterns = %v", trusted.IgnorePatterns)
+	}
+}
+
+// TestMerge_CarriesTrustedIgnorePatterns proves the resolved Config the pipeline
+// reads carries the trusted-resolved ignore list.
+func TestMerge_CarriesTrustedIgnorePatterns(t *testing.T) {
+	effective := EffectiveRepoConfig(
+		&RepoConfig{IgnorePatterns: []string{"*"}},
+		&RepoConfig{IgnorePatterns: []string{"vendor/**"}},
+		false,
+	)
+	got := Merge(&GlobalConfig{}, effective)
+	if len(got.IgnorePatterns) != 1 || got.IgnorePatterns[0] != "vendor/**" {
+		t.Errorf("ignore_patterns = %v, want the trusted value", got.IgnorePatterns)
 	}
 }
 

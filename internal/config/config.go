@@ -12,10 +12,12 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/kunchenguid/no-mistakes/internal/evidence"
+	"github.com/kunchenguid/no-mistakes/internal/paths"
 	"github.com/kunchenguid/no-mistakes/internal/types"
 	"github.com/kunchenguid/no-mistakes/internal/winproc"
 	"gopkg.in/yaml.v3"
@@ -138,10 +140,16 @@ type globalConfigRaw struct {
 
 // RepoConfig represents .no-mistakes.yaml in a repo root.
 type RepoConfig struct {
-	Agent          types.AgentName   `yaml:"agent"`
-	Agents         []types.AgentName `yaml:"-"`
-	Commands       Commands          `yaml:"commands"`
-	IgnorePatterns []string          `yaml:"ignore_patterns"`
+	Agent    types.AgentName   `yaml:"agent"`
+	Agents   []types.AgentName `yaml:"-"`
+	Commands Commands          `yaml:"commands"`
+	// IgnorePatterns drops matching paths from the change set the pipeline works
+	// on. A change set with nothing left approves the review step without any
+	// agent review, so this is a gate control honored ONLY from the trusted
+	// default-branch copy of .no-mistakes.yaml (see EffectiveRepoConfig),
+	// regardless of allow_repo_commands: a contributor's pushed branch must not
+	// be able to ignore its own changes out of review.
+	IgnorePatterns []string `yaml:"ignore_patterns"`
 	// AllowRepoCommands opts in to honoring the code-executing selection
 	// fields (commands.{test,lint,format} and agent) from a contributor's
 	// pushed branch instead of the trusted default-branch copy. It is read
@@ -417,14 +425,16 @@ type Config struct {
 	SessionReuse          bool
 	Eval                  Eval
 	Commands              Commands
-	IgnorePatterns        []string
-	AutoFix               AutoFix
-	CI                    CI
-	Commit                Commit
-	Intent                Intent
-	Test                  Test
-	Document              Document
-	Review                Review
+	// IgnorePatterns is the resolved, trusted-only ignore list (see
+	// RepoConfig.IgnorePatterns and EffectiveRepoConfig).
+	IgnorePatterns []string
+	AutoFix        AutoFix
+	CI             CI
+	Commit         Commit
+	Intent         Intent
+	Test           Test
+	Document       Document
+	Review         Review
 	// DisableProjectSettings is the resolved, trusted-only opt-out (see the
 	// RepoConfig field). When true, gate agents are launched with their
 	// project-level settings/instructions suppressed; the daemon fails the run
@@ -1222,16 +1232,21 @@ func validateAgentArgsOverride(override map[string][]string) error {
 // not already exist. Failures are logged at debug level and silently ignored.
 func EnsureDefaultGlobalConfig(path string) {
 	if _, err := os.Stat(path); err == nil {
+		// An existing config an older version wrote is still world-readable, and
+		// this is the one place that owns the file's mode.
+		if mErr := paths.MakeFilePrivate(path); mErr != nil {
+			slog.Debug("failed to restrict config permissions", "path", path, "error", mErr)
+		}
 		return
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		slog.Debug("failed to stat config path", "path", path, "error", err)
 		return
 	}
-	if mkErr := os.MkdirAll(filepath.Dir(path), 0o755); mkErr != nil {
+	if mkErr := paths.EnsurePrivateDir(filepath.Dir(path)); mkErr != nil {
 		slog.Debug("failed to create config directory", "path", filepath.Dir(path), "error", mkErr)
 		return
 	}
-	if wErr := os.WriteFile(path, []byte(defaultConfigYAML), 0o644); wErr != nil {
+	if wErr := os.WriteFile(path, []byte(defaultConfigYAML), paths.FileMode); wErr != nil {
 		slog.Debug("failed to write default config", "path", path, "error", wErr)
 	}
 }
@@ -1499,8 +1514,11 @@ func validatePathInstructionGlob(pattern string) error {
 // project-instruction boundary. NoCI is trusted-only so a pushed branch cannot
 // self-declare no-CI and bypass its own checks, and CI (the transient-rerun
 // budget) is trusted-only because every rerun it authorizes is another
-// provider-side workflow run billed to the repository. All five ignore
-// allowRepoCommands, which scopes only the code-executing selection fields.
+// provider-side workflow run billed to the repository. IgnorePatterns is
+// trusted-only because an all-ignored change set approves the review step with
+// no agent review, so a pushed list can switch off the review that gates it.
+// All six ignore allowRepoCommands, which scopes only the code-executing
+// selection fields.
 // When allowRepoCommands is
 // true the maintainer has explicitly opted in (via allow_repo_commands on the
 // TRUSTED default-branch copy) to honoring the pushed branch's commands and
@@ -1511,9 +1529,9 @@ func validatePathInstructionGlob(pattern string) error {
 // branch - this blocks the supply-chain vector for repos that ship
 // .no-mistakes.yaml only on feature branches.
 //
-// Non-executing fields (ignore patterns, auto-fix, commit, intent, test) are
-// always taken from the pushed copy, matching prior behavior, since they cannot
-// run arbitrary shell, select a process, or spend the maintainer's CI minutes.
+// Non-executing fields (auto-fix, commit, intent, test) are always taken from
+// the pushed copy, matching prior behavior, since they cannot run arbitrary
+// shell, select a process, spend the maintainer's CI minutes, or waive a gate.
 // The single exception inside test is evidence.branch, which names a git ref
 // the daemon pushes to and is therefore trusted-only.
 func EffectiveRepoConfig(pushed, trusted *RepoConfig, allowRepoCommands bool) *RepoConfig {
@@ -1552,6 +1570,13 @@ func EffectiveRepoConfig(pushed, trusted *RepoConfig, allowRepoCommands bool) *R
 		// artifacts are collected. The publisher independently refuses any
 		// branch without its marker file, so this is defense in depth.
 		effective.Test.Evidence.Branch = trusted.Test.Evidence.Branch
+		// ignore_patterns decides whether the branch is reviewed at all: the
+		// review step approves the run with no agent review once every changed
+		// path is ignored, so a pushed ignore_patterns: ["*"] would switch
+		// review off for exactly the branch under review. It is trusted-only for
+		// that reason. The copy keeps the effective slice from aliasing the
+		// maintainer's config.
+		effective.IgnorePatterns = slices.Clone(trusted.IgnorePatterns)
 	} else {
 		effective.Document = DocumentRaw{}
 		effective.Review = ReviewRaw{}
@@ -1559,6 +1584,10 @@ func EffectiveRepoConfig(pushed, trusted *RepoConfig, allowRepoCommands bool) *R
 		effective.NoCI = false
 		effective.CI = CIRaw{}
 		effective.Test.Evidence.Branch = nil
+		// No trusted copy means no maintainer ignore list, so nothing is
+		// ignored and every changed path is reviewed. Falling back to the pushed
+		// list here would restore the review bypass above.
+		effective.IgnorePatterns = nil
 	}
 	if allowRepoCommands {
 		return &effective

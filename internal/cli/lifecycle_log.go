@@ -31,7 +31,7 @@ func logLifecycleInvocation(command string, force bool) {
 		line = strings.Replace(line, "lifecycle ", "lifecycle FORCE ", 1)
 	}
 
-	f, err := os.OpenFile(p.CLILog(), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	f, err := paths.OpenPrivateAppend(p.CLILog())
 	if err != nil {
 		return
 	}

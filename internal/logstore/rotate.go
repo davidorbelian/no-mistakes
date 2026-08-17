@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/kunchenguid/no-mistakes/internal/paths"
 )
 
 // Policy defines the hard size of the current file and how many same-sized
@@ -48,17 +50,23 @@ type RotatingWriter struct {
 }
 
 // Open opens path for append and immediately brings any pre-existing files
-// under policy. Directories are created with the project-standard mode.
+// under policy. The directory and the log are owner-only app-state modes, and an
+// existing log is tightened because the open mode applies only to a file being
+// created.
 func Open(path string, policy Policy) (*RotatingWriter, error) {
 	if err := validatePolicy(policy); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := paths.EnsurePrivateDir(filepath.Dir(path)); err != nil {
 		return nil, fmt.Errorf("create log directory: %w", err)
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, paths.FileMode)
 	if err != nil {
 		return nil, fmt.Errorf("open log: %w", err)
+	}
+	if err := paths.MakeFilePrivate(path); err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf("restrict log permissions: %w", err)
 	}
 	w := &RotatingWriter{path: path, policy: policy, file: file}
 	if err := w.normalizeExistingLocked(); err != nil {
@@ -269,7 +277,7 @@ func copySectionAtomic(src *os.File, offset, length int64, target string) error 
 			_ = os.Remove(tmpPath)
 		}
 	}()
-	if err := tmp.Chmod(0o644); err != nil {
+	if err := tmp.Chmod(paths.FileMode); err != nil {
 		return err
 	}
 	if _, err := io.CopyN(tmp, io.NewSectionReader(src, offset, length), length); err != nil {
