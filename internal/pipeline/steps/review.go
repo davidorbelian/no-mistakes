@@ -170,11 +170,12 @@ Previous review findings to address:
 	// Path-scoped repository review guidance, taken from the trusted
 	// default-branch config copy (regardless of allow_repo_commands) so a pushed
 	// branch cannot steer the reviewer that gates it. Selection runs against the
-	// complete changed-file set, never the ignore-filtered one, so a pushed
-	// ignore_patterns entry cannot suppress a trusted rule. Only blocks whose
-	// glob matches a changed path are appended, so a repository with none
-	// configured - or none relevant to this diff - gets the prompt above
-	// unchanged.
+	// complete changed-file set, never the ignore-filtered one, so a rule still
+	// applies to a path the ignore list drops from the work set; ignore_patterns
+	// is trusted-only as well, so neither layer takes a pushed value. Only
+	// blocks whose glob matches a changed path are appended, so a repository
+	// with none configured - or none relevant to this diff - gets the prompt
+	// above unchanged.
 	pathInstructionMatches := matchPathInstructions(changed, sctx.Config.Review.PathInstructions)
 	logPathInstructions(sctx.Log, pathInstructionMatches)
 	pathInstructions := reviewPathInstructionsSection(pathInstructionMatches)

@@ -854,9 +854,9 @@ func TestReviewStep_AppendsMatchedPathInstructionsOnly(t *testing.T) {
 	}
 }
 
-// ignore_patterns comes from the pushed branch, so it must not decide which
-// trusted rules steer the review. A contributor who ignores the very path a
-// maintainer's rule covers still gets that rule.
+// ignore_patterns must not decide which trusted rules steer the review, on top
+// of being trusted-only itself. A rule still applies to a path the ignore list
+// drops from the work set.
 func TestReviewStep_PushedIgnorePatternsCannotSuppressPathInstructions(t *testing.T) {
 	t.Parallel()
 

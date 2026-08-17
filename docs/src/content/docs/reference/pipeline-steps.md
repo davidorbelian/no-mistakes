@@ -67,10 +67,10 @@ AI code review of your diff.
 
 **Behavior:**
 - Diffs the base commit against head
-- Filters out files matching `ignore_patterns` from the repo config
+- Filters out files matching `ignore_patterns` from the trusted default-branch repo config; when nothing is left to review the run is approved without an agent review, which is why that field is never read from the pushed branch
 - Sends the filtered diff to the agent with structured review instructions and a structured output schema
 - Appends the [`review.path_instructions`](/no-mistakes/reference/repo-config/#reviewpath_instructions) blocks whose glob matches at least one changed file, in configured order, each labelled with its own `path` and the files it matched so a scoped rule cannot read as a repository-wide instruction; a change that matches nothing, or a repo with none configured, gets the prompt unchanged
-- Selects those blocks against the complete changed-file list rather than the `ignore_patterns`-filtered one, so a pushed-branch ignore entry cannot suppress a trusted rule, and reads them from the trusted default-branch config copy regardless of `allow_repo_commands`
+- Selects those blocks against the complete changed-file list rather than the `ignore_patterns`-filtered one, so a rule still applies to an ignored path, and reads them from the trusted default-branch config copy regardless of `allow_repo_commands`
 - Logs which of those rules it applied and which matched no changed path
 - Includes user intent when the run has supplied intent or transcript matching found a relevant local agent session; the detailed provenance semantics are documented in [Intent extraction](/no-mistakes/guides/agents/#intent-extraction)
 - Treats authoritative intent as enforceable for source-verifiable acceptance criteria, but does not report the absence of a remote branch, push, pull request, or CI state that this run's later Push, PR, or CI step owns

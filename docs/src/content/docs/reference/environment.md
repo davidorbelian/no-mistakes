@@ -24,6 +24,15 @@ When set, everything else moves under this root:
 - Local evaluation cases and registry: `$NM_HOME/eval/` (created by automatic collection or an explicit `no-mistakes eval` command)
 - Managed service names get a short stable suffix derived from `$NM_HOME` so multiple installs don't collide.
 
+### Permissions
+
+The data directory is private to the account that owns it.
+`$NM_HOME` and the directories no-mistakes creates in it are `0700`, and the state database, the logs, the global config, and each gate's `config` file (which keeps your credentialled upstream URL in plain text so pushes can authenticate) are `0600`.
+On a machine with more than one local account, another account cannot read your run history, review findings, agent output, or that credential.
+A root an older version created world-readable is tightened the next time the daemon or the CLI touches it.
+Windows has no POSIX file modes, so nothing is changed there; your user profile directory already excludes other accounts.
+The daemon socket has always been `0700`.
+
 ## `NM_DAEMON_CONNECT_TIMEOUT`
 
 Override how long a CLI client waits for an existing daemon socket to accept a connection before failing instead of hanging.

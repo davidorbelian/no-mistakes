@@ -141,7 +141,8 @@ func (p *Paths) CLILog() string { return filepath.Join(p.root, "logs", "cli.log"
 // behind by a crashed predecessor.
 func (p *Paths) ServerPIDsDir() string { return filepath.Join(p.root, "servers") }
 
-// EnsureDirs creates all required directories under root.
+// EnsureDirs creates all required directories under root, private to their
+// owner.
 func (p *Paths) EnsureDirs() error {
 	dirs := []string{
 		p.root,
@@ -151,7 +152,7 @@ func (p *Paths) EnsureDirs() error {
 		p.ServerPIDsDir(),
 	}
 	for _, d := range dirs {
-		if err := os.MkdirAll(d, 0o755); err != nil {
+		if err := EnsurePrivateDir(d); err != nil {
 			return err
 		}
 	}

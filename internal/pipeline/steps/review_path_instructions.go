@@ -31,11 +31,13 @@ type pathInstructionMatches struct {
 // matchPathInstructions selects the trusted rules whose glob matches at least
 // one changed path, in config order.
 //
-// changed is the COMPLETE changed-file set, never the ignore-filtered subset:
-// ignore_patterns comes from the pushed branch, so filtering here would let a
-// contributor delete a maintainer's rule from the review of their own branch by
-// adding that rule's glob to their ignore list. Which files the reviewer is
-// asked to look at is a separate question, answered by reviewablePaths.
+// changed is the COMPLETE changed-file set, never the ignore-filtered subset, so
+// a rule keeps applying to a path the ignore list drops from the work set.
+// ignore_patterns is trusted-only (see config.EffectiveRepoConfig), so this is
+// the second layer against a contributor deleting a maintainer's rule from the
+// review of their own branch by adding that rule's glob to their ignore list.
+// Which files the reviewer is asked to look at is a separate question, answered
+// by reviewablePaths.
 //
 // Globs follow the same rules as ignore_patterns (matchIgnorePattern), so a
 // maintainer has one path-matching model to learn. Two entries with the same
