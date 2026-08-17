@@ -126,10 +126,6 @@ func TestLifecycleCommandsWriteCallerAttributionToCLILog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("daemon restart --force failed: %v\n%s", err, out)
 	}
-	out, err = executeCmd("update", "--force")
-	if err != nil {
-		t.Fatalf("update --force failed: %v\n%s", err, out)
-	}
 
 	data, err := os.ReadFile(filepath.Join(nmHome, "logs", "cli.log"))
 	if err != nil {
@@ -139,7 +135,6 @@ func TestLifecycleCommandsWriteCallerAttributionToCLILog(t *testing.T) {
 	for _, want := range []string{
 		"lifecycle FORCE command=daemon.stop",
 		"lifecycle FORCE command=daemon.restart",
-		"lifecycle FORCE command=update",
 		"force=true",
 		"pid=",
 		"ppid=",

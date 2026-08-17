@@ -5,43 +5,27 @@ import (
 	"testing"
 )
 
-func TestUpdateCommandDevBuild(t *testing.T) {
-	isolateUpdateCommand(t)
+func TestUpdateCommandRefusesToSelfUpdate(t *testing.T) {
+	for _, args := range [][]string{
+		{"update"},
+		{"update", "--beta"},
+		{"update", "-y"},
+		{"update", "--force"},
+	} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			t.Setenv("NM_HOME", t.TempDir())
 
-	out, err := executeCmd("update")
-	if err != nil {
-		t.Fatalf("update failed: %v\noutput: %s", err, out)
+			out, err := executeCmd(args...)
+			if err == nil {
+				t.Fatalf("%v should refuse, got output: %s", args, out)
+			}
+			message := out + err.Error()
+			if !strings.Contains(message, "self-update is disabled in this build") {
+				t.Fatalf("%v should explain the refusal, got output %q error %v", args, out, err)
+			}
+			if strings.Contains(message, "self-update unavailable for development builds") {
+				t.Fatalf("%v must not reach the updater, got output %q error %v", args, out, err)
+			}
+		})
 	}
-	if !strings.Contains(out, "self-update unavailable for development builds") {
-		t.Fatalf("unexpected update output: %s", out)
-	}
-}
-
-func TestUpdateCommandBetaFlag(t *testing.T) {
-	isolateUpdateCommand(t)
-
-	out, err := executeCmd("update", "--beta")
-	if err != nil {
-		t.Fatalf("update --beta failed: %v\noutput: %s", err, out)
-	}
-	if !strings.Contains(out, "self-update unavailable for development builds") {
-		t.Fatalf("unexpected update output: %s", out)
-	}
-}
-
-func TestUpdateCommandYesFlag(t *testing.T) {
-	isolateUpdateCommand(t)
-
-	out, err := executeCmd("update", "-y")
-	if err != nil {
-		t.Fatalf("update -y failed: %v\noutput: %s", err, out)
-	}
-	if !strings.Contains(out, "self-update unavailable for development builds") {
-		t.Fatalf("unexpected update output: %s", out)
-	}
-}
-
-func isolateUpdateCommand(t *testing.T) {
-	t.Helper()
-	t.Setenv("NM_HOME", t.TempDir())
 }

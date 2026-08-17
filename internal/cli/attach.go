@@ -13,7 +13,6 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/telemetry"
 	"github.com/kunchenguid/no-mistakes/internal/tui"
 	"github.com/kunchenguid/no-mistakes/internal/types"
-	"github.com/kunchenguid/no-mistakes/internal/update"
 	"github.com/kunchenguid/no-mistakes/internal/wizard"
 	"github.com/mattn/go-isatty"
 	"github.com/spf13/cobra"
@@ -147,7 +146,9 @@ func attachRun(ctx context.Context, w io.Writer, runID string, rootDefault bool,
 		"explicit_run_id": runID != "",
 	})
 
-	return runTUI(p.Socket(), client, run, update.CachedLatestVersion())
+	// This build never checks for releases, so the TUI has no newer version to
+	// advertise.
+	return runTUI(p.Socket(), client, run, "")
 }
 
 func attachEntrypoint(rootDefault bool, runID string) string {

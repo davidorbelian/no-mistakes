@@ -80,38 +80,27 @@ Alternatively, authenticate the Azure DevOps extension with `az devops login`.
 
 See [Provider Integration](/no-mistakes/guides/provider-integration/#azure-devops).
 
-## `GITHUB_TOKEN`
+## `GITHUB_TOKEN` and `GH_TOKEN`
 
-GitHub token used to authenticate updater release requests.
-
-|         |          |
-| ------- | -------- |
-| Type    | `string` |
-| Default | (none)   |
-
-When set, the updater sends the token as a Bearer authorization header for release metadata requests, including background update checks, and release asset downloads. `GITHUB_TOKEN` takes precedence over `GH_TOKEN`; when neither variable is set, these requests remain anonymous. The token is not printed, logged, or persisted.
-
-## `GH_TOKEN`
-
-Fallback GitHub token used by `no-mistakes update` when `GITHUB_TOKEN` is unset or empty.
+GitHub tokens read by the `gh` CLI, not by `no-mistakes`.
 
 |         |          |
 | ------- | -------- |
 | Type    | `string` |
 | Default | (none)   |
 
-See [`GITHUB_TOKEN`](#github_token) for the updater's authentication behavior and precedence.
+This build makes no GitHub request of its own, because it never checks for or installs a release. The `gh` CLI it runs for PR and CI steps reads these variables itself; see [Provider Integration](/no-mistakes/guides/provider-integration/#github).
 
 ## `NO_MISTAKES_NO_UPDATE_CHECK`
 
-Disable background update checks.
+Has no effect.
 
-|         |                                                |
-| ------- | ---------------------------------------------- |
-| Type    | `1` to disable, anything else to leave enabled |
-| Default | unset (checks enabled)                         |
+|         |          |
+| ------- | -------- |
+| Type    | `string` |
+| Default | (none)   |
 
-Update checks run on every CLI invocation except `update` itself and version queries (`--version` / `-v`, which stay side-effect-free), hit GitHub releases, cache the result in `$NM_HOME/update-check.json`, and print a one-line notification to stderr when a newer version is available. Dev builds (non-semver versions) suppress the check automatically.
+This build never checks for a new release, so there is nothing to suppress; see [`no-mistakes update`](/no-mistakes/reference/cli/#no-mistakes-update).
 
 ## `XDG_DATA_HOME`
 
