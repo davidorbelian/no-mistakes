@@ -14,7 +14,6 @@ import (
 	"github.com/kunchenguid/no-mistakes/internal/daemon"
 	"github.com/kunchenguid/no-mistakes/internal/paths"
 	"github.com/kunchenguid/no-mistakes/internal/telemetry"
-	"github.com/kunchenguid/no-mistakes/internal/update"
 )
 
 func main() {
@@ -52,16 +51,6 @@ func run() int {
 		}
 		return 0
 	}
-
-	if handled, err := update.MaybeHandleBackgroundCheck(os.Args[1:]); handled {
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			return 1
-		}
-		return 0
-	}
-
-	update.MaybeNotifyAndCheck(os.Args[1:], os.Stderr)
 
 	// Redirect slog to a file for interactive CLI commands so logs never
 	// leak into user-facing output. The daemon process sets up its own

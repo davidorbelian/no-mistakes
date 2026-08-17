@@ -1,27 +1,22 @@
 package cli
 
 import (
-	"github.com/kunchenguid/no-mistakes/internal/update"
+	"errors"
+
 	"github.com/spf13/cobra"
 )
 
 func newUpdateCmd() *cobra.Command {
-	var beta bool
-	var yes bool
-	var force bool
-	cmd := &cobra.Command{
+	return &cobra.Command{
 		Use:   "update",
-		Short: "Update no-mistakes and reset the daemon",
-		Args:  cobra.NoArgs,
+		Short: "Report that this build never updates itself",
+		Args:  cobra.ArbitraryArgs,
+		// The upstream flags (--beta, -y, --force) are gone, but any of them
+		// must still land on the refusal below instead of a flag-parse error,
+		// so every habit and script gets the reason.
+		FParseErrWhitelist: cobra.FParseErrWhitelist{UnknownFlags: true},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logLifecycleInvocation("update", force)
-			return trackCommand("update", func() error {
-				return update.Run(cmd.Context(), cmd.OutOrStdout(), cmd.ErrOrStderr(), update.RunOptions{Beta: beta, Yes: yes, Force: force, Stdin: cmd.InOrStdin()})
-			})
+			return errors.New("self-update is disabled in this build: it never downloads or installs releases; update it where it is built and installed from source")
 		},
 	}
-	cmd.Flags().BoolVar(&beta, "beta", false, "install the latest release including prereleases")
-	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "answer yes to update safety prompts")
-	cmd.Flags().BoolVar(&force, "force", false, "update and restart the daemon even when pipeline runs are active")
-	return cmd
 }

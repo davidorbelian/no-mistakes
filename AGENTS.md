@@ -14,6 +14,14 @@ Safest local verification sequence after non-trivial changes:
 - `make e2e` when touching agent integrations, the e2e harness, or recorded fixtures
 - `go build -o ./bin/no-mistakes ./cmd/no-mistakes`
 
+**This Fork Never Updates Itself**
+
+- This fork is run as a local push gate and is built and installed from source by the machine that declares it, so nothing may replace the binary out of band. The upstream self-updater also installs `kunchenguid` release binaries, which are not this fork.
+- No shipped code path may check for or install a release: `cmd/no-mistakes/main.go` performs no update check, `no-mistakes update` refuses in `internal/cli/update.go` and never reaches the updater, and `attach.go` passes an empty latest version to the TUI so it never advertises one. `$NM_HOME/update-check.json` is never written, and no request goes to `api.github.com` with `GITHUB_TOKEN`/`GH_TOKEN`.
+- `internal/update` stays in the tree, unreferenced by the binary, so upstream merges stay near-trivial. When an upstream merge reintroduces a call site, delete the call, not the package.
+- Regressions: `TestCLIBinaryDoesNotLinkTheSelfUpdater` (root, the whole contract in one dependency check), `TestUpdateCommandRefusesToSelfUpdate`.
+- User-facing wording is owned by `docs/src/content/docs/reference/cli.md` (`no-mistakes update`) and `docs/src/content/docs/start-here/installation.md` (Update).
+
 **Fork Routing**
 
 - `repos.upstream_url` is the parent repository used for PR base routing; `repos.fork_url` is an optional GitHub fork push target.

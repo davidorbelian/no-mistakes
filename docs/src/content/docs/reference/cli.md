@@ -427,29 +427,15 @@ Each validation run performs the authoritative agent resolution again after appl
 
 ## no-mistakes update
 
-Update the installed binary and reset the daemon.
+Report that this build never updates itself.
 
 ```sh
 no-mistakes update
-no-mistakes update --beta
-no-mistakes update -y
-no-mistakes update --force
 ```
 
-Downloads the latest release, verifies the SHA-256 checksum, atomically replaces the running binary, and resets the daemon when it is running or stale daemon artifacts exist so the new executable is picked up, preferring the managed service path and falling back to a detached daemon if service startup is unavailable or fails.
-By default this installs the latest stable release.
-Pass `--beta` to include prereleases and install the latest beta when one is newer than the current stable release.
-If the daemon is running from a different executable path, update still prompts before replacing it; pass `-y`/`--yes` to answer that prompt non-interactively.
-If the daemon executable path cannot be determined, the update aborts before replacement.
-If the daemon does not come back cleanly after a successful replacement, the command reports that failure.
-On macOS, removes the quarantine extended attribute.
-[Daemon & Worktrees](/no-mistakes/concepts/daemon/#starting-and-stopping)
-owns the active-run guard, the scope of `--force` and `--yes`, and recursive
-validation-step containment.
+This build never downloads or installs a release. The command changes nothing, prints the reason, and exits non-zero; any flags you pass are accepted and ignored so the reason is what you see. Update the binary where it is built and installed from source.
 
-Because `update` installs the latest official release binary, the replacement binary includes the default self-hosted telemetry host and website ID. Disable telemetry with `NO_MISTAKES_TELEMETRY=0`, or override the host and website ID with `NO_MISTAKES_UMAMI_HOST` and `NO_MISTAKES_UMAMI_WEBSITE_ID`.
-
-Background update checks run automatically on each CLI invocation (except `update` itself and version queries `--version` / `-v`, which stay side-effect-free). If a newer version is available, a notification is printed to stderr. Suppressed for dev builds or when `NO_MISTAKES_NO_UPDATE_CHECK=1` is set.
+No CLI invocation checks for a new release either: nothing is fetched from GitHub, no update notification is printed, `$NM_HOME/update-check.json` is never written, and the TUI never advertises a newer version.
 
 ## no-mistakes daemon start
 
@@ -474,7 +460,7 @@ no-mistakes daemon stop --force
 owns the active-run guard, the scope of `--force`, and recursive
 validation-step containment.
 
-This does not remove the managed service. A later `no-mistakes`, `no-mistakes daemon start`, `init`, `attach`, `rerun`, or `update` can start the daemon again through the same service manager when available, or as a detached daemon otherwise.
+This does not remove the managed service. A later `no-mistakes`, `no-mistakes daemon start`, `init`, `attach`, or `rerun` can start the daemon again through the same service manager when available, or as a detached daemon otherwise.
 
 ## no-mistakes daemon restart
 
