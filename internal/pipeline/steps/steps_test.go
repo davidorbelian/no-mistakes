@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kunchenguid/no-mistakes/internal/gittest"
 )
 
 // TestMain handles fake CLI dispatch when the test binary is invoked as gh/glab.
@@ -19,11 +21,10 @@ func TestMain(m *testing.M) {
 		handleFakeCLI(mode)
 		return
 	}
-	// Agent harnesses inject git config (e.g. safe.bareRepository=explicit)
-	// via GIT_CONFIG_COUNT/KEY_n/VALUE_n; tests that need it re-set it with
-	// t.Setenv (issue #362).
-	os.Unsetenv("GIT_CONFIG_COUNT")
-	os.Exit(m.Run())
+	restoreGitConfig := gittest.IsolateConfig()
+	code := m.Run()
+	restoreGitConfig()
+	os.Exit(code)
 }
 
 func handleFakeCLI(mode string) {

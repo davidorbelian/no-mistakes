@@ -7,27 +7,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kunchenguid/no-mistakes/internal/gittest"
 )
 
 func TestMain(m *testing.M) {
-	dir, err := os.MkdirTemp("", "no-mistakes-git-tests-")
-	if err != nil {
-		panic(err)
-	}
-	if err := os.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "gitconfig")); err != nil {
-		panic(err)
-	}
-	if err := os.Setenv("GIT_CONFIG_NOSYSTEM", "1"); err != nil {
-		panic(err)
-	}
-	// Agent harnesses inject git config (e.g. safe.bareRepository=explicit)
-	// via GIT_CONFIG_COUNT/KEY_n/VALUE_n; tests that need it re-set it with
-	// t.Setenv (issue #362).
-	if err := os.Unsetenv("GIT_CONFIG_COUNT"); err != nil {
-		panic(err)
-	}
+	restoreGitConfig := gittest.IsolateConfig()
 	code := m.Run()
-	_ = os.RemoveAll(dir)
+	restoreGitConfig()
 	os.Exit(code)
 }
 
@@ -422,5 +409,33 @@ func TestWorktreeAddRemoveOnBareRepoUnderSafeBareRepositoryExplicit(t *testing.T
 	}
 	if err := WorktreeRemove(ctx, bare, wt); err != nil {
 		t.Fatalf("worktree remove from bare repo: %v", err)
+	}
+}
+
+// A remote configured with only a pushurl - what a machine-wide push guard
+// creates in every repository - is listed by `git remote` but has no URL to
+// read. That is an absent value, which callers must be able to tell apart from
+// a repository they could not read at all.
+func TestGetConfiguredRemoteURLsSeparatesAbsentFromUnreadable(t *testing.T) {
+	ctx := context.Background()
+	dir := initTestRepo(t)
+	run(t, dir, "git", "remote", "add", "origin", "https://example.com/owner/project.git")
+	run(t, dir, "git", "config", "remote.blocked.pushurl", "DISABLED-never-pushes-here")
+
+	urls, found, err := GetConfiguredRemoteURLs(ctx, dir, "origin")
+	if err != nil || !found || len(urls) != 1 || urls[0] != "https://example.com/owner/project.git" {
+		t.Fatalf("origin = %v, found %t, err %v", urls, found, err)
+	}
+
+	urls, found, err = GetConfiguredRemoteURLs(ctx, dir, "blocked")
+	if err != nil {
+		t.Fatalf("push-only remote must not be an error, got %v", err)
+	}
+	if found || len(urls) != 0 {
+		t.Fatalf("push-only remote = %v, found %t, want absent", urls, found)
+	}
+
+	if _, _, err := GetConfiguredRemoteURLs(ctx, filepath.Join(dir, "missing"), "origin"); err == nil {
+		t.Fatal("an unreadable repository must still be an error")
 	}
 }

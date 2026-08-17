@@ -337,10 +337,15 @@ func TestCIStep_CommitAndPush_GitCommandsUseStandardCredentialEnv(t *testing.T) 
 	t.Setenv("GIT_TERMINAL_PROMPT", "1")
 	t.Setenv("GIT_OPTIONAL_LOCKS", "1")
 	home := t.TempDir()
-	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte("[credential \"https://github.com\"]\n\thelper = !gh auth git-credential\n"), 0o644); err != nil {
+	globalConfig := filepath.Join(home, ".gitconfig")
+	if err := os.WriteFile(globalConfig, []byte("[credential \"https://github.com\"]\n\thelper = !gh auth git-credential\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("HOME", home)
+	// The package isolates git from the machine's configuration, and
+	// GIT_CONFIG_GLOBAL outranks $HOME/.gitconfig, so this test names its own
+	// global config instead of relying on HOME resolution.
+	t.Setenv("GIT_CONFIG_GLOBAL", globalConfig)
 
 	realGit, err := exec.LookPath("git")
 	if err != nil {

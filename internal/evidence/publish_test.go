@@ -7,13 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kunchenguid/no-mistakes/internal/gittest"
 )
 
-// Ambient GIT_CONFIG_* injection from agent harnesses would leak into every
-// git call these tests make, so drop it for the package.
 func TestMain(m *testing.M) {
-	os.Unsetenv("GIT_CONFIG_COUNT")
-	os.Exit(m.Run())
+	restoreGitConfig := gittest.IsolateConfig()
+	code := m.Run()
+	restoreGitConfig()
+	os.Exit(code)
 }
 
 func runGit(t *testing.T, dir string, args ...string) string {

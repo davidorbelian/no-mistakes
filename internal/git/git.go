@@ -186,15 +186,35 @@ func GetConfiguredRemoteURL(ctx context.Context, dir, name string) (string, erro
 	return Run(ctx, dir, "config", "--get", "remote."+name+".url")
 }
 
-// GetConfiguredRemoteURLs returns every literal URL configured for a remote.
-// Callers that require an authoritative source can reject zero or multiple
-// values rather than letting git silently select one.
-func GetConfiguredRemoteURLs(ctx context.Context, dir, name string) ([]string, error) {
+// GetConfiguredRemoteURLs returns every literal URL configured for a remote,
+// and whether the remote has any URL at all. Callers that require an
+// authoritative source can reject multiple values rather than letting git
+// silently select one.
+//
+// An absent URL is not an error: a remote configured with only a pushurl - what
+// a machine-wide push guard in global config creates in every repository - is
+// listed by `git remote` and has no URL to read. `git config --get-all` reports
+// that with exit status 1, which must not be confused with a repository the
+// caller could not read.
+func GetConfiguredRemoteURLs(ctx context.Context, dir, name string) ([]string, bool, error) {
 	out, err := Run(ctx, dir, "config", "--null", "--get-all", "remote."+name+".url")
 	if err != nil {
-		return nil, err
+		if isMissingConfigKey(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
 	}
-	return strings.Split(strings.TrimSuffix(out, "\x00"), "\x00"), nil
+	if out == "" {
+		return nil, false, nil
+	}
+	return strings.Split(strings.TrimSuffix(out, "\x00"), "\x00"), true, nil
+}
+
+// isMissingConfigKey reports whether a `git config` failure only means the key
+// is not set, which git signals with exit status 1.
+func isMissingConfigKey(err error) bool {
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr) && exitErr.ExitCode() == 1
 }
 
 // HasRemote reports whether a remote named name is configured in the repo at

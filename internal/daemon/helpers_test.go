@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kunchenguid/no-mistakes/internal/db"
+	"github.com/kunchenguid/no-mistakes/internal/gittest"
 	"github.com/kunchenguid/no-mistakes/internal/ipc"
 	"github.com/kunchenguid/no-mistakes/internal/logstore"
 	"github.com/kunchenguid/no-mistakes/internal/paths"
@@ -74,11 +75,10 @@ func TestMain(m *testing.M) {
 	if os.Getenv("NM_HOOK_HELPER") == "1" {
 		os.Exit(0)
 	}
-	// Agent harnesses inject git config (e.g. safe.bareRepository=explicit)
-	// via GIT_CONFIG_COUNT/KEY_n/VALUE_n; tests that need it re-set it with
-	// t.Setenv (issue #362).
-	os.Unsetenv("GIT_CONFIG_COUNT")
-	os.Exit(m.Run())
+	restoreGitConfig := gittest.IsolateConfig()
+	code := m.Run()
+	restoreGitConfig()
+	os.Exit(code)
 }
 
 // startTestDaemon starts RunWithResources in a goroutine with a temp root.

@@ -169,6 +169,32 @@ func TestRefreshRepoURLsFailurePreservesExactRegistration(t *testing.T) {
 	}
 }
 
+// A push-only remote is listed by `git remote` but has no URL to read, which a
+// machine-wide `remote.<name>.pushurl` push guard creates in every repository.
+// It cannot identify a fork, so it is not a candidate rather than a failure.
+func TestRefreshRepoURLsIgnoresPushOnlyRemote(t *testing.T) {
+	ctx := context.Background()
+	database, workDir := refreshFixture(t, "git@github.com:parent/project.git", "git@github.com:fork/project.git")
+	gitTestCmd(t, workDir, "remote", "add", "origin", "https://github.com/parent/project.git")
+	gitTestCmd(t, workDir, "remote", "add", "fork", "https://github.com/fork/project.git")
+	gitTestCmd(t, workDir, "config", "remote.blocked.pushurl", "DISABLED-never-pushes-here")
+	repo, err := database.GetRepoByPath(workDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated, changed, err := RefreshRepoURLs(ctx, database, repo)
+	if err != nil {
+		t.Fatalf("refresh: %v", err)
+	}
+	if !changed {
+		t.Fatal("expected upstream and fork refresh past the push-only remote")
+	}
+	if updated.UpstreamURL != "https://github.com/parent/project.git" || updated.ForkURL != "https://github.com/fork/project.git" {
+		t.Fatalf("updated repo = %+v", updated)
+	}
+}
+
 func gitTestCmd(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)
